@@ -60,113 +60,134 @@
     <div id="board"></div>
     <script>
         const boardElement = document.getElementById('board');
-        const status = document.getElementById('status');
-        const myColor = Math.random() > 0.5 ? "red" : "black"; // Randomize player color
-        let currentPlayer = "red"; // First player to start
-        let board = initializeBoard();
-        let localConnection, dataChannel;
+const status = document.getElementById('status');
+const myColor = Math.random() > 0.5 ? "red" : "black";
+let currentPlayer = "red";
+let board = initializeBoard();
+let localConnection, dataChannel;
 
-        document.getElementById('connectButton').addEventListener('click', async () => {
-            await setupConnection();
-        });
+document.getElementById('connectButton').addEventListener('click', async () => {
+    await setupConnection();
+});
 
-        function initializeBoard() {
-            const board = Array(8).fill(null).map(() => Array(8).fill(null));
-            for (let row = 0; row < 3; row++) {
-                for (let col = 0; col < 8; col++) {
-                    if ((row + col) % 2 === 1) board[row][col] = "black";
-                }
+document.getElementById('signalButton').addEventListener('click', async () => {
+    const input = document.getElementById('signalInput').value;
+    const signal = JSON.parse(input);
+
+    if (signal.type === "offer") {
+        localConnection = new RTCPeerConnection();
+
+        localConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                console.log("ICE Candidate:", JSON.stringify(event.candidate));
             }
-            for (let row = 5; row < 8; row++) {
-                for (let col = 0; col < 8; col++) {
-                    if ((row + col) % 2 === 1) board[row][col] = "red";
-                }
-            }
-            renderBoard(board);
-            return board;
-        }
+        };
 
-        function renderBoard(board) {
-            boardElement.innerHTML = "";
-            for (let row = 0; row < 8; row++) {
-                for (let col = 0; col < 8; col++) {
-                    const cell = document.createElement('div');
-                    cell.classList.add('cell', (row + col) % 2 === 0 ? 'white' : 'black');
-                    if (board[row][col]) {
-                        const piece = document.createElement('div');
-                        piece.classList.add(`${board[row][col]}-piece`);
-                        cell.appendChild(piece);
-                        cell.addEventListener('click', () => makeMove(row, col));
-                    }
-                    boardElement.appendChild(cell);
-                }
-            }
-        }
-
-        function makeMove(row, col) {
-            if (currentPlayer !== myColor) {
-                alert("Not your turn!");
-                return;
-            }
-
-            if (!isValidMove(row, col)) {
-                alert("Invalid move!");
-                return;
-            }
-
-            // Example move logic: clear the cell and switch turns
-            board[row][col] = null;
-            currentPlayer = currentPlayer === "red" ? "black" : "red";
-
-            sendMessage({ type: "move", data: { board, currentPlayer } });
-            renderBoard(board);
-        }
-
-        function isValidMove(row, col) {
-            // Placeholder for proper validation logic (e.g., diagonal moves)
-            return board[row][col] === myColor;
-        }
-
-        async function setupConnection() {
-            localConnection = new RTCPeerConnection();
-
-            dataChannel = localConnection.createDataChannel("game");
+        localConnection.ondatachannel = (event) => {
+            dataChannel = event.channel;
             dataChannel.onopen = () => {
                 status.textContent = "Connected! You are playing as " + myColor;
             };
             dataChannel.onmessage = (event) => handlePeerMessage(JSON.parse(event.data));
+        };
 
-            localConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    console.log("ICE Candidate:", JSON.stringify(event.candidate));
-                }
-            };
+        await localConnection.setRemoteDescription(signal);
+        const answer = await localConnection.createAnswer();
+        await localConnection.setLocalDescription(answer);
 
-            const offer = await localConnection.createOffer();
-            await localConnection.setLocalDescription(offer);
+        console.log("Answer:", JSON.stringify(answer));
+    } else if (signal.type === "answer") {
+        await localConnection.setRemoteDescription(signal);
+    } else if (signal.candidate) {
+        await localConnection.addIceCandidate(signal);
+    }
+});
 
-            // Log the offer for manual exchange
-            console.log("Offer:", JSON.stringify(offer));
-            status.textContent = "Waiting for peer connection...";
+function initializeBoard() {
+    const board = Array(8).fill(null).map(() => Array(8).fill(null));
+    for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 8; col++) {
+            if ((row + col) % 2 === 1) board[row][col] = "black";
         }
+    }
+    for (let row = 5; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            if ((row + col) % 2 === 1) board[row][col] = "red";
+        }
+    }
+    renderBoard(board);
+    return board;
+}
 
-        function sendMessage(message) {
-            if (dataChannel && dataChannel.readyState === "open") {
-                dataChannel.send(JSON.stringify(message));
-            } else {
-                console.error("Data channel is not open.");
+function renderBoard(board) {
+    boardElement.innerHTML = "";
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            const cell = document.createElement('div');
+            cell.classList.add('cell', (row + col) % 2 === 0 ? 'white' : 'black');
+            if (board[row][col]) {
+                const piece = document.createElement('div');
+                piece.classList.add(`${board[row][col]}-piece`);
+                cell.appendChild(piece);
+                cell.addEventListener('click', () => makeMove(row, col));
             }
+            boardElement.appendChild(cell);
         }
+    }
+}
 
-        function handlePeerMessage(message) {
-            if (message.type === "move") {
-                const { board: newBoard, currentPlayer: newPlayer } = message.data;
-                board = newBoard;
-                currentPlayer = newPlayer;
-                renderBoard(board);
-                status.textContent = `It's ${currentPlayer}'s turn.`;
-            }
+function makeMove(row, col) {
+    if (currentPlayer !== myColor) {
+        alert("Not your turn!");
+        return;
+    }
+
+    board[row][col] = null;
+    currentPlayer = currentPlayer === "red" ? "black" : "red";
+
+    sendMessage({ type: "move", data: { board, currentPlayer } });
+    renderBoard(board);
+}
+
+async function setupConnection() {
+    localConnection = new RTCPeerConnection();
+
+    dataChannel = localConnection.createDataChannel("game");
+    dataChannel.onopen = () => {
+        status.textContent = "Connected! You are playing as " + myColor;
+    };
+    dataChannel.onmessage = (event) => handlePeerMessage(JSON.parse(event.data));
+
+    localConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+            console.log("ICE Candidate:", JSON.stringify(event.candidate));
         }
+    };
+
+    const offer = await localConnection.createOffer();
+    await localConnection.setLocalDescription(offer);
+
+    console.log("Offer:", JSON.stringify(offer));
+    status.textContent = "Waiting for peer connection...";
+}
+
+function sendMessage(message) {
+    if (dataChannel && dataChannel.readyState === "open") {
+        dataChannel.send(JSON.stringify(message));
+    } else {
+        console.error("Data channel is not open.");
+    }
+}
+
+function handlePeerMessage(message) {
+    if (message.type === "move") {
+        const { board: newBoard, currentPlayer: newPlayer } = message.data;
+        board = newBoard;
+        currentPlayer = newPlayer;
+        renderBoard(board);
+        status.textContent = `It's ${currentPlayer}'s turn.`;
+    }
+}
     </script>
 </body>
 
