@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Checkers Game</title>
+    <title>Peer-to-Peer Checkers</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -35,13 +35,12 @@
     <button id="connectButton">Connect</button>
     <div id="board"></div>
     <script>
-        let localConnection, remoteConnection, dataChannel, receiveChannel;
-        const board = initializeBoard();
+        const boardElement = document.getElementById('board');
+        const status = document.getElementById('status');
         const myColor = Math.random() > 0.5 ? "red" : "black"; // Randomize player color
         let currentPlayer = "red"; // First player to start
-
-        const status = document.getElementById('status');
-        const boardElement = document.getElementById('board');
+        let board = initializeBoard();
+        let localConnection, dataChannel;
 
         document.getElementById('connectButton').addEventListener('click', async () => {
             await setupConnection();
@@ -86,59 +85,56 @@
                 return;
             }
 
-            // Add move logic here (e.g., validation and updating state)
-            // For simplicity, we just switch turns and send the new state
+            if (!isValidMove(row, col)) {
+                alert("Invalid move!");
+                return;
+            }
+
+            // Example move logic: clear the cell and switch turns
+            board[row][col] = null;
             currentPlayer = currentPlayer === "red" ? "black" : "red";
-            board[row][col] = null; // Example: removing a piece
-            sendMessage({
-                type: "move",
-                data: { board, currentPlayer }
-            });
+
+            sendMessage({ type: "move", data: { board, currentPlayer } });
             renderBoard(board);
+        }
+
+        function isValidMove(row, col) {
+            // Placeholder for proper validation logic (e.g., diagonal moves)
+            return board[row][col] === myColor;
         }
 
         async function setupConnection() {
             localConnection = new RTCPeerConnection();
-            remoteConnection = new RTCPeerConnection();
 
             dataChannel = localConnection.createDataChannel("game");
-            dataChannel.onopen = () => status.textContent = "Connected!";
+            dataChannel.onopen = () => {
+                status.textContent = "Connected! You are playing as " + myColor;
+            };
             dataChannel.onmessage = (event) => handlePeerMessage(JSON.parse(event.data));
 
-            remoteConnection.ondatachannel = (event) => {
-                receiveChannel = event.channel;
-                receiveChannel.onmessage = (event) => handlePeerMessage(JSON.parse(event.data));
-            };
-
             localConnection.onicecandidate = (event) => {
-                if (event.candidate) remoteConnection.addIceCandidate(event.candidate);
-            };
-
-            remoteConnection.onicecandidate = (event) => {
-                if (event.candidate) localConnection.addIceCandidate(event.candidate);
+                if (event.candidate) {
+                    console.log("ICE Candidate:", event.candidate);
+                }
             };
 
             const offer = await localConnection.createOffer();
             await localConnection.setLocalDescription(offer);
-            await remoteConnection.setRemoteDescription(offer);
-
-            const answer = await remoteConnection.createAnswer();
-            await remoteConnection.setLocalDescription(answer);
-            await localConnection.setRemoteDescription(answer);
-
-            status.textContent = `You are playing as ${myColor}.`;
+            status.textContent = "Waiting for peer connection...";
         }
 
         function sendMessage(message) {
             if (dataChannel && dataChannel.readyState === "open") {
                 dataChannel.send(JSON.stringify(message));
+            } else {
+                console.error("Data channel is not open.");
             }
         }
 
         function handlePeerMessage(message) {
             if (message.type === "move") {
                 const { board: newBoard, currentPlayer: newPlayer } = message.data;
-                Object.assign(board, newBoard);
+                board = newBoard;
                 currentPlayer = newPlayer;
                 renderBoard(board);
                 status.textContent = `It's ${currentPlayer}'s turn.`;
