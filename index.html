@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +10,7 @@
             font-family: Arial, sans-serif;
             text-align: center;
         }
+
         #board {
             display: grid;
             grid-template-columns: repeat(8, 50px);
@@ -16,6 +18,7 @@
             gap: 2px;
             margin: 20px auto;
         }
+
         .cell {
             width: 50px;
             height: 50px;
@@ -23,16 +26,37 @@
             align-items: center;
             justify-content: center;
         }
-        .black { background-color: black; }
-        .white { background-color: white; }
-        .red-piece { background-color: red; border-radius: 50%; width: 80%; height: 80%; }
-        .black-piece { background-color: black; border-radius: 50%; width: 80%; height: 80%; }
+
+        .black {
+            background-color: black;
+        }
+
+        .white {
+            background-color: white;
+        }
+
+        .red-piece {
+            background-color: red;
+            border-radius: 50%;
+            width: 80%;
+            height: 80%;
+        }
+
+        .black-piece {
+            background-color: black;
+            border-radius: 50%;
+            width: 80%;
+            height: 80%;
+        }
     </style>
 </head>
+
 <body>
     <h1>Peer-to-Peer Checkers</h1>
     <p id="status">Waiting for connection...</p>
     <button id="connectButton">Connect</button>
+    <textarea id="signalInput" placeholder="Paste offer/answer here"></textarea>
+    <button id="signalButton">Submit Signal</button>
     <div id="board"></div>
     <script>
         const boardElement = document.getElementById('board');
@@ -114,12 +138,15 @@
 
             localConnection.onicecandidate = (event) => {
                 if (event.candidate) {
-                    console.log("ICE Candidate:", event.candidate);
+                    console.log("ICE Candidate:", JSON.stringify(event.candidate));
                 }
             };
 
             const offer = await localConnection.createOffer();
             await localConnection.setLocalDescription(offer);
+
+            // Log the offer for manual exchange
+            console.log("Offer:", JSON.stringify(offer));
             status.textContent = "Waiting for peer connection...";
         }
 
@@ -142,4 +169,5 @@
         }
     </script>
 </body>
+
 </html>
