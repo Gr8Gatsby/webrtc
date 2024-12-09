@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkers Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 50px);
+            grid-template-rows: repeat(8, 50px);
+            gap: 2px;
+            margin: 20px auto;
+        }
+        .cell {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .black { background-color: black; }
+        .white { background-color: white; }
+        .red-piece { background-color: red; border-radius: 50%; width: 80%; height: 80%; }
+        .black-piece { background-color: black; border-radius: 50%; width: 80%; height: 80%; }
+    </style>
+</head>
+<body>
+    <h1>Peer-to-Peer Checkers</h1>
+    <p id="status">Waiting for connection...</p>
+    <button id="connectButton">Connect</button>
+    <div id="board"></div>
+    <script>
+        let localConnection, remoteConnection, dataChannel, receiveChannel;
+        const board = initializeBoard();
+        const myColor = Math.random() > 0.5 ? "red" : "black"; // Randomize player color
+        let currentPlayer = "red"; // First player to start
+
+        const status = document.getElementById('status');
+        const boardElement = document.getElementById('board');
+
+        document.getElementById('connectButton').addEventListener('click', async () => {
+            await setupConnection();
+        });
+
+        function initializeBoard() {
+            const board = Array(8).fill(null).map(() => Array(8).fill(null));
+            for (let row = 0; row < 3; row++) {
+                for (let col = 0; col < 8; col++) {
+                    if ((row + col) % 2 === 1) board[row][col] = "black";
+                }
+            }
+            for (let row = 5; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    if ((row + col) % 2 === 1) board[row][col] = "red";
+                }
+            }
+            renderBoard(board);
+            return board;
+        }
+
+        function renderBoard(board) {
+            boardElement.innerHTML = "";
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell', (row + col) % 2 === 0 ? 'white' : 'black');
+                    if (board[row][col]) {
+                        const piece = document.createElement('div');
+                        piece.classList.add(`${board[row][col]}-piece`);
+                        cell.appendChild(piece);
+                        cell.addEventListener('click', () => makeMove(row, col));
+                    }
+                    boardElement.appendChild(cell);
+                }
+            }
+        }
+
+        function makeMove(row, col) {
+            if (currentPlayer !== myColor) {
+                alert("Not your turn!");
+                return;
+            }
+
+            // Add move logic here (e.g., validation and updating state)
+            // For simplicity, we just switch turns and send the new state
+            currentPlayer = currentPlayer === "red" ? "black" : "red";
+            board[row][col] = null; // Example: removing a piece
+            sendMessage({
+                type: "move",
+                data: { board, currentPlayer }
+            });
+            renderBoard(board);
+        }
+
+        async function setupConnection() {
+            localConnection = new RTCPeerConnection();
+            remoteConnection = new RTCPeerConnection();
+
+            dataChannel = localConnection.createDataChannel("game");
+            dataChannel.onopen = () => status.textContent = "Connected!";
+            dataChannel.onmessage = (event) => handlePeerMessage(JSON.parse(event.data));
+
+            remoteConnection.ondatachannel = (event) => {
+                receiveChannel = event.channel;
+                receiveChannel.onmessage = (event) => handlePeerMessage(JSON.parse(event.data));
+            };
+
+            localConnection.onicecandidate = (event) => {
+                if (event.candidate) remoteConnection.addIceCandidate(event.candidate);
+            };
+
+            remoteConnection.onicecandidate = (event) => {
+                if (event.candidate) localConnection.addIceCandidate(event.candidate);
+            };
+
+            const offer = await localConnection.createOffer();
+            await localConnection.setLocalDescription(offer);
+            await remoteConnection.setRemoteDescription(offer);
+
+            const answer = await remoteConnection.createAnswer();
+            await remoteConnection.setLocalDescription(answer);
+            await localConnection.setRemoteDescription(answer);
+
+            status.textContent = `You are playing as ${myColor}.`;
+        }
+
+        function sendMessage(message) {
+            if (dataChannel && dataChannel.readyState === "open") {
+                dataChannel.send(JSON.stringify(message));
+            }
+        }
+
+        function handlePeerMessage(message) {
+            if (message.type === "move") {
+                const { board: newBoard, currentPlayer: newPlayer } = message.data;
+                Object.assign(board, newBoard);
+                currentPlayer = newPlayer;
+                renderBoard(board);
+                status.textContent = `It's ${currentPlayer}'s turn.`;
+            }
+        }
+    </script>
+</body>
+</html>
